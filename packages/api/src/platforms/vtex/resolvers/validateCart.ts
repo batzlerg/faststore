@@ -27,6 +27,7 @@ import { shouldUpdateShippingData } from '../utils/shouldUpdateShippingData'
 import { getAddressOrderForm } from '../utils/getAddressOrderForm'
 import { SelectedAddress } from '../clients/commerce/types/ShippingData'
 import { createNewAddress } from '../utils/createNewAddress'
+import { getOfferingReturnability } from '../utils/offerings'
 
 type Indexed<T> = T & { index?: number }
 
@@ -52,6 +53,7 @@ const orderFormItemToOffer = (
 ): Indexed<IStoreOffer> => ({
   listPrice: item.listPrice / 100,
   price: item.sellingPrice / 100,
+  returnability: getOfferingReturnability(item.offerings),
   quantity: item.quantity,
   seller: { identifier: item.seller },
   itemOffered: {
@@ -166,6 +168,7 @@ const orderFormToCart = async (
       orderNumber: form.orderFormId,
       acceptedOffer: form.items.map(async (item) => ({
         ...item,
+        returnability: getOfferingReturnability(item.offerings),
         product: await skuLoader.load(`${item.id}-invisibleItems`),
       })),
     },

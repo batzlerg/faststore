@@ -29,7 +29,7 @@ export const fetchAPI = async (
   }
 
   console.error(info, init, response)
-  const text = await response.text()
-
-  throw new Error(text)
+  let errorMsg = await response.text()
+  if (!errorMsg) errorMsg = `${response.status} ${response.statusText}`
+  throw new Error(errorMsg)
 }

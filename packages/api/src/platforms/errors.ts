@@ -1,4 +1,4 @@
-type ErrorType = 'BadRequestError' | 'NotFoundError' | 'RedirectError'
+export type ErrorType = 'BadRequestError' | 'NotFoundError' | 'RedirectError'
 
 interface Extension {
   type: ErrorType

@@ -16,6 +16,7 @@ export { stringify as stringifyCacheControl } from './directives/cacheControl'
 export type { CacheControl } from './directives/cacheControl'
 
 export type Options = OptionsVTEX
+export { NewrelicClient } from "./services/NewrelicClient"
 
 const platforms = {
   vtex: {

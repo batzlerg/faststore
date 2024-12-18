@@ -27,9 +27,12 @@ const apiOptions = {
   subDomainPrefix: ['www'],
   hideUnavailableItems: false,
   incrementAddress: false,
+
   flags: {
     enableOrderFormSync: true,
   },
+
+  ecmSearchAccount: "ecmSearchAccount--workspace"
 } as Options
 
 const mockedFetch = jest.fn()

@@ -4,6 +4,7 @@ import type { SearchArgs } from '../clients/search'
 import type { Facet } from '../clients/search/types/FacetSearchResult'
 import { ProductSearchResult } from '../clients/search/types/ProductSearchResult'
 import { pickBestSku } from '../utils/sku'
+import { checkEcmSearchEnabled } from '../utils/featureFlags'
 
 export type Root = {
   searchArgs: Omit<SearchArgs, 'type'>
@@ -26,7 +27,8 @@ export const StoreSearchResult: Record<string, Resolver<Root>> = {
     const { searchArgs } = root
 
     // If there's no search query, suggest the most popular searches.
-    if (!searchArgs.query) {
+    const query = searchArgs?.query?.trim();
+    if (!query) {
       const topSearches = await search.topSearches()
 
       return {
@@ -62,16 +64,28 @@ export const StoreSearchResult: Record<string, Resolver<Root>> = {
     }
   },
   products: async ({ productSearchPromise }) => {
-    const productSearchResult = await productSearchPromise
-
+    const productSearchResult: ProductSearchResult = await productSearchPromise
     const skus = productSearchResult.products
       .map((product) => {
         // What determines the presentation of the SKU is the price order
         // https://help.vtex.com/pt/tutorial/ordenando-imagens-na-vitrine-e-na-pagina-de-produto--tutorials_278
         const maybeSku = pickBestSku(product.items)
+        const sponsoredMetadata = {
+          beaconClick: product?.adMetaUi?.beaconClick,
+          beaconView: product?.adMetaUi?.beaconView,
+          beaconLoad: product?.adMetaUi?.beaconLoad,
+          placementBeaconView: productSearchResult?.adMetaPlacementUi?.placementBeaconView,
+          placementBeaconLoad: productSearchResult?.adMetaPlacementUi?.placementBeaconLoad,
+        }
 
-        return maybeSku && enhanceSku(maybeSku, product)
-      })
+        return {
+          ...(maybeSku && enhanceSku(maybeSku, product)),
+          sponsoredMetadata: product?.adMetaUi?.beaconClick
+            ? sponsoredMetadata
+            : null,
+        }
+      }
+      )
       .filter((sku) => !!sku)
 
     return {
@@ -95,7 +109,9 @@ export const StoreSearchResult: Record<string, Resolver<Root>> = {
 
     ctx.storage.searchArgs = searchArgs
 
-    const { facets = [] } = await is.facets(searchArgs)
+    const isEcmSearchEnabled = checkEcmSearchEnabled(ctx)
+    const getFacets = isEcmSearchEnabled ? is.ecmFacets : is.facets
+    const { facets = [] } = await getFacets(searchArgs)
 
     const isCollectionPage = !searchArgs.query
 

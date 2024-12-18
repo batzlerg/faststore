@@ -1,0 +1,13 @@
+"""
+Sponsored Product Metadata
+"""
+type SponsoredMetadata {
+  """
+  Sponsor name.
+  """
+  sponsor: String
+  """
+  Color of border.
+  """
+  color: String
+}

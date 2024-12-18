@@ -100,6 +100,14 @@ interface CommertialOffer {
   getInfoErrorMessage: null;
   cacheVersionUsedToCallCheckout: string;
   paymentOptions: PaymentOptions;
+  offerings: Offering[];
+}
+
+interface Offering {
+  price: number;
+  name: string;
+  id: string;
+  type: string;
 }
 
 interface DeliverySlaSample {

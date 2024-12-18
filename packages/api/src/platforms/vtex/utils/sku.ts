@@ -1,6 +1,7 @@
 import { min } from './orderStatistics'
 import { bestOfferFirst } from './productStock'
 import type { Item } from '../clients/search/types/ProductSearchResult'
+import { stubCommercialOfferIfMissing } from './stubCommercialOfferIfMissing'
 
 /**
  * This function implements Portal heuristics for returning the best sku for a product.
@@ -10,7 +11,7 @@ import type { Item } from '../clients/search/types/ProductSearchResult'
 export const pickBestSku = (skus: Item[]) => {
   const offersBySku = skus.flatMap((sku) =>
     sku.sellers.map((seller) => ({
-      offer: seller.commertialOffer,
+      offer: stubCommercialOfferIfMissing(seller.commertialOffer),
       sku,
     }))
   )

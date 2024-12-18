@@ -83,10 +83,12 @@ beforeAll(async () => {
     subDomainPrefix: ['www'],
     hideUnavailableItems: false,
     incrementAddress: false,
-    showSponsored: false,
+
     flags: {
       enableOrderFormSync: true,
     },
+
+    ecmSearchAccount: "ecmSearchAccount--workspace"
   })
 })
 

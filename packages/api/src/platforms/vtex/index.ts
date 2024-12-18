@@ -26,8 +26,11 @@ import { ShippingSLA } from './resolvers/shippingSLA'
 import { SkuVariants } from './resolvers/skuVariations'
 import type { Channel } from './utils/channel'
 import ChannelMarshal from './utils/channel'
+import NewrelicClient from '../../services/NewrelicClient'
 
 export interface Options {
+  ecmSearchAccount?: string
+  ecmSearchEnv?: string
   platform: 'vtex'
   account: string
   environment: 'vtexcommercestable' | 'vtexcommercebeta'
@@ -37,9 +40,10 @@ export interface Options {
   locale: string
   hideUnavailableItems: boolean
   simulationBehavior?: 'default' | 'skip' | 'only1P'
-  showSponsored: boolean
   incrementAddress: boolean
   flags?: FeatureFlags
+  enableSponsoredProducts?: boolean,
+  newRelicApiKey?: string
 }
 
 interface FeatureFlags {
@@ -63,6 +67,8 @@ export interface Context {
     cookies: Map<string, Record<string, string>>
   }
   headers: Record<string, string>
+  featureFlags: Record<string, boolean>
+  logger: NewrelicClient
 }
 
 export type Resolver<R = unknown, A = unknown, Return = any> = (
@@ -96,17 +102,22 @@ const Resolvers = {
 
 export const getContextFactory =
   (options: Options) =>
-  (ctx: any): Context => {
-    ctx.storage = {
-      channel: ChannelMarshal.parse(options.channel),
-      flags: options.flags ?? {},
-      locale: options.locale,
-      cookies: new Map<string, Record<string, string>>(),
-    }
-    ctx.clients = getClients(options, ctx)
-    ctx.loaders = getLoaders(options, ctx)
+    (ctx: any): Context => {
+      ctx.storage = {
+        channel: ChannelMarshal.parse(options.channel),
+        flags: options.flags ?? {},
+        locale: options.locale,
+        cookies: new Map<string, Record<string, string>>(),
+      }
+      ctx.clients = getClients(options, ctx)
+      ctx.loaders = getLoaders(options, ctx)
+      ctx.featureFlags = {
+        ecmSearch: Boolean(options.ecmSearchAccount),
+        enableSponsoredProducts: Boolean(options?.enableSponsoredProducts)
+      }
+      ctx.logger = new NewrelicClient(options.account, options.newRelicApiKey)
 
-    return ctx
-  }
+      return ctx
+    }
 
 export const getResolvers = (_: Options) => Resolvers

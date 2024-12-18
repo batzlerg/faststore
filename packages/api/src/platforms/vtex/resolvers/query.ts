@@ -1,7 +1,7 @@
 import { FACET_CROSS_SELLING_MAP } from './../utils/facets'
 import { BadRequestError, NotFoundError } from '../../errors'
 import { mutateChannelContext, mutateLocaleContext } from '../utils/contex'
-import { enhanceSku } from '../utils/enhanceSku'
+import { enhanceSku, type EnhancedSku } from '../utils/enhanceSku'
 import {
   findChannel,
   findCrossSelling,
@@ -26,8 +26,10 @@ import type { CategoryTree } from '../clients/commerce/types/CategoryTree'
 import type { Context } from '../index'
 import { isValidSkuId, pickBestSku } from '../utils/sku'
 import { SearchArgs } from '../clients/search'
+import { checkEcmSearchEnabled } from '../utils/featureFlags'
 
 export const Query = {
+  // HEARST PDP
   product: async (_: unknown, { locator }: QueryProductArgs, ctx: Context) => {
     // Insert channel in context for later usage
     const channel = findChannel(locator)
@@ -44,18 +46,29 @@ export const Query = {
     }
 
     const {
-      loaders: { skuLoader },
-      clients: { commerce, search },
+      loaders: { skuLoader, ecmSkuLoader },
+      clients,
     } = ctx
 
+    const isEcmSearchEnabled = checkEcmSearchEnabled(ctx)
+
     try {
+      // if we have a valid ID (meaning it's already known to be a valid SKU ID), use it to query
+      // if not, we're probably in the initial PDP load, where we only have the slug. attempt to
+      // parse the SKU ID from the slug, because subsequent PDP queries will use that ID as the primary arg
+      // and the dataLoader caching only hits when we successfully make all queries using the same ID value
       const skuId = id ?? slug?.split('-').pop() ?? ''
 
       if (!isValidSkuId(skuId)) {
-        throw new Error('Invalid SkuId')
+        throw new Error('Invalid SkuId from slug')
       }
 
-      const sku = await skuLoader.load(skuId)
+      let sku: EnhancedSku
+      if (isEcmSearchEnabled) {
+        sku = await ecmSkuLoader.load(skuId)
+      } else {
+        sku = await skuLoader.load(skuId)
+      }
 
       /**
        * Here be dragons 🦄🦄🦄
@@ -76,31 +89,68 @@ export const Query = {
 
       return sku
     } catch (err) {
+      // we expect to hit this catch branch when the last segment of the slug isn't
+      // a valid SKU ID on the product returned by skuLoader.load(skuId).
+      // e.g. slug = /customized-slug-apple-iphone-22 would lead to a skuId of 22, which
+      // is technically valid but not actually the SKU ID for the product with that slug
+
       if (slug == null) {
-        throw new BadRequestError('Missing slug or id')
+        throw new BadRequestError(
+          `Missing slug or id. Original error: "${(err as unknown as Error)?.message}". Inputs: ${JSON.stringify({ id, slug })}. URL: ${ctx.headers.referer}`
+        )
       }
 
-      const route = await commerce.catalog.portal.pagetype(`${slug}/p`)
+      if (isEcmSearchEnabled) {
+        // N.B. the reason this doesn't use a loader is because dataLoader batches requests
+        // to the same service per tick, and there's only one request which uses slug
+        // as its arg: the top-level PDP query where we don't have SKU ID yet
+        const slugWithoutSkuId = slug.split('-').slice(0, -1).join('-')
+        const candidateSlugs = [slugWithoutSkuId, slug].filter(
+          (candidateSlug) => !!candidateSlug
+        )
 
-      if (route.pageType !== 'Product' || !route.id) {
-        throw new NotFoundError(`No product found for slug ${slug}`)
+        const {
+          products: [product],
+        } = await clients.search.ecmProductDetail({
+          page: 0,
+          count: 1,
+          query: `${candidateSlugs.join(';')}`,
+        })
+
+        if (!product) {
+          throw new NotFoundError(
+            `No product found for candidate slugs '${candidateSlugs.join(`' or '`)}'`
+          )
+        }
+
+        const sku = pickBestSku(product.items)
+
+        return enhanceSku(sku, product)
+      } else {
+        const route = await clients.commerce.catalog.portal.pagetype(
+          `${slug}/p`
+        )
+
+        if (route.pageType !== 'Product' || !route.id) {
+          throw new NotFoundError(`No product found for slug ${slug}`)
+        }
+
+        const {
+          products: [product],
+        } = await clients.search.products({
+          page: 0,
+          count: 1,
+          query: `product:${route.id}`,
+        })
+
+        if (!product) {
+          throw new NotFoundError(`No product found for id ${route.id}`)
+        }
+
+        const sku = pickBestSku(product.items)
+
+        return enhanceSku(sku, product)
       }
-
-      const {
-        products: [product],
-      } = await search.products({
-        page: 0,
-        count: 1,
-        query: `product:${route.id}`,
-      })
-
-      if (!product) {
-        throw new NotFoundError(`No product found for id ${route.id}`)
-      }
-
-      const sku = pickBestSku(product.items)
-
-      return enhanceSku(sku, product)
     }
   },
   collection: (_: unknown, { slug }: QueryCollectionArgs, ctx: Context) => {
@@ -162,7 +212,11 @@ export const Query = {
       selectedFacets: selectedFacets?.flatMap(transformSelectedFacet) ?? [],
     }
 
-    const productSearchPromise = ctx.clients.search.products(searchArgs)
+    const searchProducts = checkEcmSearchEnabled(ctx)
+      ? ctx.clients.search.ecmProducts
+      : ctx.clients.search.products
+
+    const productSearchPromise = searchProducts(searchArgs)
 
     return { searchArgs, productSearchPromise }
   },
@@ -176,7 +230,11 @@ export const Query = {
     } = ctx
 
     const after = maybeAfter ? Number(maybeAfter) : 0
-    const products = await search.products({
+
+    const searchProducts = checkEcmSearchEnabled(ctx)
+      ? search.ecmProducts
+      : search.products
+    const products = await searchProducts({
       page: Math.ceil(after / first),
       count: first,
     })

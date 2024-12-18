@@ -1,4 +1,5 @@
 import type { CommertialOffer } from '../clients/search/types/ProductSearchResult'
+import { stubCommercialOfferIfMissing } from './stubCommercialOfferIfMissing'
 
 export type EnhancedCommercialOffer<S, P> = CommertialOffer & {
   seller: S
@@ -14,7 +15,7 @@ export const enhanceCommercialOffer = <S, P>({
   seller: S
   product: P
 }): EnhancedCommercialOffer<S, P> => ({
-  ...offer,
+  ...stubCommercialOfferIfMissing(offer),
   product,
   seller,
 })

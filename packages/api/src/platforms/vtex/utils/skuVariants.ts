@@ -1,11 +1,12 @@
 import { StoreProduct as StoreProductType } from '../../..'
 import type { Product, Item } from '../clients/search/types/ProductSearchResult'
+import { letterSizeOrder, sortLetterSizes, sortNumericSizes } from './hearstSkuSort'
 
 export type SkuVariants = StoreProductType[]
 
 export type SkuVariantsByName = Record<string, Array<FormattedSkuVariant>>
 
-type FormattedSkuVariant = {
+export type FormattedSkuVariant = {
   alt: string
   src: string
   label: string
@@ -128,17 +129,34 @@ function compare(a: string, b: string) {
   return 0
 }
 
-function sortVariants(variantsByName: SkuVariantsByName) {
+function hearstSortVariants(variantsByName: SkuVariantsByName) {
   const sortedVariants = variantsByName
 
   for (const variantProperty in variantsByName) {
-    const areAllNumbers = variantsByName[variantProperty].every(
-      (option: any) => !Number.isNaN(Number(option.value))
-    )
+    let sortFn: (a: FormattedSkuVariant, b: FormattedSkuVariant) => number
 
-    // Preserve Admin's variants order for cases variants are strings
-    areAllNumbers &&
-      variantsByName[variantProperty].sort((a, b) => compare(a.value, b.value))
+    if (
+      // all are numeric
+      variantsByName[variantProperty].every(
+        // match numeric portion of mixed string, e.g. "5.5 US"
+        (option: any) => Boolean(option.value.match(/[\d.]+/)?.[0])
+      )
+    ) {
+      sortFn = sortNumericSizes
+    } else if (
+      // all are letter sizes - S, M, L
+      variantProperty === "Size" &&
+      variantsByName[variantProperty].some(({ value }) => {
+        const singleValue = value.split("/")?.[0].trim() // cover cases like S/M
+        return letterSizeOrder.includes(singleValue)
+      })
+    ) {
+      sortFn = sortLetterSizes
+    } else {
+      sortFn = (a, b) => compare(a.value, b.value)
+    }
+
+    variantsByName[variantProperty].sort(sortFn)
   }
 
   return sortedVariants
@@ -238,5 +256,5 @@ export function getFormattedVariations(
     })
   })
 
-  return sortVariants(variantsByName)
+  return hearstSortVariants(variantsByName)
 }

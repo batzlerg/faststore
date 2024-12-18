@@ -22,6 +22,8 @@ export const isCollectionPageType = (x: any): x is CollectionPageType =>
   typeof x.pageType === 'string' &&
   collectionPageTypes.has(x.pageType.toLowerCase())
 
+export const isInvalidSlug = (slug: string) => slug.includes('.');
+
 export const getCollectionLoader = (_: Options, clients: Clients) => {
   const limit = pLimit(CONCURRENT_REQUESTS_MAX)
 
@@ -31,6 +33,14 @@ export const getCollectionLoader = (_: Options, clients: Clients) => {
     return Promise.all(
       slugs.map((slug: string) =>
         limit(async () => {
+          if (isInvalidSlug(slug)) {
+            // if this loader is handling the path, it's already failed to match
+            // a static asset or URL redirect/rewrite. everything that passes through
+            // here and isn't already slugify'd will confusingly lead to the "Catalog returned"
+            // NotFoundError below, so we might as well avoid the call to VTEX.
+            throw new NotFoundError(`Invalid slug: ${slug}.`)
+          }
+
           const page = await clients.commerce.catalog.portal.pagetype(slug)
 
           if (isCollectionPageType(page)) {

@@ -11,6 +11,7 @@ import type { ArrayElementType } from '../../../typings'
 import type { EnhancedSku } from '../utils/enhanceSku'
 import type { OrderFormItem } from '../clients/commerce/types/OrderForm'
 import { withTax } from '../utils/taxes'
+import { getOfferingReturnability } from '../utils/offerings'
 
 type OrderFormProduct = OrderFormItem & { product: EnhancedSku }
 type SearchProduct = ArrayElementType<
@@ -153,4 +154,15 @@ export const StoreOffer: Record<string, Resolver<Root>> = {
 
     return null
   },
+  returnability: (root) => {
+    if (isSearchItem(root)) {
+      return getOfferingReturnability(root.seller.commertialOffer.offerings)
+    }
+
+    if (isOrderFormItem(root)) {
+      return getOfferingReturnability(root.offerings)
+    }
+
+    return null
+  }
 }

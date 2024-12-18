@@ -1,24 +1,17 @@
-import type { OnExecuteHookResult, Plugin } from '@envelop/core'
+import type { Plugin, OnExecuteHookResult } from '@envelop/core'
 import { isAsyncIterable } from '@envelop/core'
 import { useOnResolve } from '@envelop/on-resolve'
+import { SpanKind, Context, Span } from '@opentelemetry/api'
 import {
-  Context,
+  trace as openTelTrace,
   context as openTelContext,
-  Span,
-  SpanKind,
-  trace as openTelTrace
 } from '@opentelemetry/api'
+import type { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
+import type { Path } from 'graphql/jsutils/Path'
+import type { LoggerProvider } from '@opentelemetry/sdk-logs'
 import type { LogRecord } from '@opentelemetry/api-logs'
 import { SeverityNumber } from '@opentelemetry/api-logs'
-import type { LoggerProvider } from '@opentelemetry/sdk-logs'
-import type { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import {
-  Kind,
-  OperationDefinitionNode,
-  print,
-  type DefinitionNode
-} from 'graphql'
-import type { Path } from 'graphql/jsutils/Path'
+import { print, Kind, OperationDefinitionNode } from 'graphql'
 
 export enum AttributeName {
   EXECUTION_ERROR = 'graphql.error',
@@ -164,12 +157,8 @@ export const getFaststoreTelemetryPlugin = (
       },
       onExecute({ args, extendContext }) {
         const operationType = args.document.definitions
-          .filter(
-            (def: DefinitionNode) => def.kind === Kind.OPERATION_DEFINITION
-          )
-          .map(
-            (def: DefinitionNode) => (def as OperationDefinitionNode).operation
-          )?.[0]
+          .filter((def) => def.kind === Kind.OPERATION_DEFINITION)
+          .map((def) => (def as OperationDefinitionNode).operation)?.[0]
 
         // Span name according to Semantic Conventions
         // https://github.com/open-telemetry/semantic-conventions

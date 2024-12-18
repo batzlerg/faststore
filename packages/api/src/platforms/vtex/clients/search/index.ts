@@ -12,6 +12,8 @@ import type {
   ProductSearchResult,
   Suggestion,
 } from './types/ProductSearchResult'
+import { checkSponsoredProductsEnabled, checkSponsoredTestProductsEnabled } from '../../utils/featureFlags'
+import { determineDeviceType } from '../../utils/getDeviceViewer'
 
 export type Sort =
   | 'price:desc'
@@ -27,13 +29,12 @@ export interface SearchArgs {
   query?: string
   page: number
   count: number
-  type: 'product_search' | 'facets' | 'sponsored_products'
+  type: 'product_search' | 'facets' | 'product_detail'
   sort?: Sort
   selectedFacets?: SelectedFacet[]
   fuzzy?: '0' | '1' | 'auto'
   hideUnavailableItems?: boolean
   showInvisibleItems?: boolean
-  showSponsored?: boolean
 }
 
 export interface ProductLocator {
@@ -50,9 +51,10 @@ export const isFacetBoolean = (
 ): facet is Facet<FacetValueBoolean> => facet.type === 'TEXT'
 
 export const IntelligentSearch = (
-  { account, environment, hideUnavailableItems, simulationBehavior, showSponsored }: Options,
+  { account, environment, hideUnavailableItems, simulationBehavior, ecmSearchAccount }: Options,
   ctx: Context
 ) => {
+
   const base = `https://${account}.${environment}.com.br/api/io`
   const storeCookies = getStoreCookie(ctx)
 
@@ -137,10 +139,6 @@ export const IntelligentSearch = (
       params.append('simulationBehavior', simulationBehavior.toString())
     }
 
-    if (showSponsored !== undefined) {
-      params.append('showSponsored', showSponsored.toString())
-    }
-
     const pathname = addDefaultFacets(selectedFacets)
       .map(({ key, value }) => `${key}/${value}`)
       .join('/')
@@ -154,6 +152,102 @@ export const IntelligentSearch = (
 
   const products = (args: Omit<SearchArgs, 'type'>) =>
     search<ProductSearchResult>({ ...args, type: 'product_search' })
+
+  const EcmSearch = <T>({
+    query = '',
+    page,
+    count,
+    sort = '',
+    selectedFacets = [],
+    type,
+    fuzzy = 'auto',
+    showInvisibleItems,
+  }: SearchArgs): Promise<T> => {
+    const params = new URLSearchParams({
+      page: (page + 1).toString(),
+      count: count.toString(),
+      query,
+      sort,
+      fuzzy,
+      locale: ctx.storage.locale,
+    })
+
+    if (showInvisibleItems) {
+      params.append('show-invisible-items', 'true')
+    }
+
+    if (hideUnavailableItems !== undefined) {
+      params.append('hideUnavailableItems', hideUnavailableItems.toString())
+    }
+
+    if (simulationBehavior !== undefined) {
+      params.append('simulationBehavior', simulationBehavior.toString())
+    }
+
+    const isSponsoredProductsEnabled = checkSponsoredProductsEnabled(ctx)
+    const isTestRMNEnabled = checkSponsoredTestProductsEnabled(ctx);
+
+    if (!isSponsoredProductsEnabled && !isTestRMNEnabled) {
+      params.append('no_ads', "y")
+    }
+
+    const pathname = addDefaultFacets(selectedFacets)
+      .map(({ key, value }) => `${key}/${value}`)
+      .join('/')
+
+    const ogRequestHeaders = new Headers(ctx.headers)
+    const ogForwardedFor = ogRequestHeaders.get('x-forwarded-for') ?? ''
+    const userAgent = ogRequestHeaders.get('user-agent') ?? ''
+    const viewierCountry = ogRequestHeaders.get('cloudfront-viewer-country') ?? ''
+    const secUAaBrowser= ogRequestHeaders.get('sec-ch-ua') ?? ''
+    const secUAaPlatform = ogRequestHeaders.get('sec-ch-ua-platform') ?? ''
+    const noAds = ogRequestHeaders.get('x-no-ads') ?? ''
+    const referer = ogRequestHeaders.get('referer') ?? ''
+    const cookies = ogRequestHeaders.get('cookie') ?? ''
+    const ofidMatch = cookies?.match(/__ofid=([^;]+)/)
+    const cartId = ofidMatch ? ofidMatch[1] : ''
+
+    const customerDeviceType = determineDeviceType(ogRequestHeaders)
+    
+    const requestInit = {
+      headers: {
+        'x-original-forwarded-for': ogForwardedFor,
+        'x-vtexcustomer-user-agent': userAgent,
+        'x-vtexcustomer-viewer-country': viewierCountry,
+        'x-vtexcustomer-device-type': customerDeviceType,
+        'x-vtexcustomer-sec-ch-ua': secUAaBrowser,
+        'x-vtexcustomer-sec-ch-ua-platform': secUAaPlatform,
+        'x-vtexcustomer-referer': referer,
+        'x-vtexcustomer-cart-id': cartId,
+        'x-vtexcustomer-cookies': cookies,
+        'x-no-ads': noAds,
+      },
+    }
+
+    const targetUrl = encodeURI(`https://${ecmSearchAccount}.${environment}.com.br/api/io/_v/ecm-search/${type}/${pathname}?${params.toString()}`);
+
+    ctx.logger.info(`request to ECM Search`, {
+      type,
+      url: targetUrl,
+      forwardedHeaders: requestInit,
+      ...(ecmSearchAccount !== 'hearst' && { headers: JSON.stringify(ctx.headers)})
+    })
+
+    return fetchAPI(
+      targetUrl,
+      requestInit,
+      { storeCookies }
+    )
+  }
+
+  const ecmProducts = (args: Omit<SearchArgs, 'type'>) =>
+    EcmSearch<ProductSearchResult>({ ...args, type: 'product_search' })
+
+  const ecmProductDetail = (args: Omit<SearchArgs, 'type'>) =>
+    EcmSearch<ProductSearchResult>({ ...args, type: 'product_detail' })
+
+  const ecmFacets = (args: Omit<SearchArgs, 'type'>) =>
+    EcmSearch<FacetSearchResult>({ ...args, type: 'facets' })
 
   const suggestedTerms = (
     args: Omit<SearchArgs, 'type'>
@@ -190,5 +284,10 @@ export const IntelligentSearch = (
     products,
     suggestedTerms,
     topSearches,
+
+    // HEARST ECM SEARCH
+    ecmProducts,
+    ecmProductDetail,
+    ecmFacets,
   }
 }

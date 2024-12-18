@@ -11,6 +11,13 @@ export interface Attachment {
   content: Record<string, string>
 }
 
+export interface Offering {
+  name: string
+  type: string
+  id: string
+  price: number
+}
+
 export interface OrderFormItem {
   id: string
   name: string
@@ -55,6 +62,7 @@ export interface OrderFormItem {
     total: number
   }
   attachments: Attachment[]
+  offerings: Offering[]
 }
 
 export interface SKUSpecification {

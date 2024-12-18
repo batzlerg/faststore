@@ -19,6 +19,13 @@ type QueryProduct = PromiseType<ReturnType<typeof Query.product>>
 export type Root = QueryProduct & {
   attachmentsValues?: Attachment[]
   unitMultiplier: number
+  sponsoredMetadata: {
+    beaconClick: string
+    beaconLoad: string
+    beaconView: string
+    placementBeaconLoad: string
+    placementBeaconView: string
+  } | null
 }
 
 const DEFAULT_IMAGE = {
@@ -54,7 +61,7 @@ export const StoreProduct: Record<string, Resolver<Root>> & {
     canonical: canonicalFromProduct(isVariantOf),
   }),
   brand: ({ isVariantOf: { brand } }) => ({ name: brand }),
-  unitMultiplier: ({unitMultiplier}) => unitMultiplier,
+  unitMultiplier: ({ unitMultiplier }) => unitMultiplier,
   breadcrumbList: ({
     isVariantOf: { categories, productName, linkText },
     itemId,
@@ -90,13 +97,13 @@ export const StoreProduct: Record<string, Resolver<Root>> & {
       })
     )
 
-    if(typeof args !== 'object') {
-      return resolvedImages;
+    if (typeof args !== 'object') {
+      return resolvedImages
     }
 
     let { context, limit } = args as StoreProductImageArgs
 
-    const shouldFilter = context !== "generic"
+    const shouldFilter = context !== 'generic'
 
     // Normalize count to undefined as we want any negative value to always return the full list of images
     limit = limit || -1
@@ -104,8 +111,8 @@ export const StoreProduct: Record<string, Resolver<Root>> & {
 
     let filteredImages = shouldFilter
       ? resolvedImages.filter(
-          ({ keywords: imageKeywords }) => imageKeywords === context
-        )
+        ({ keywords: imageKeywords }) => imageKeywords === context
+      )
       : resolvedImages
 
     filteredImages =
@@ -156,5 +163,5 @@ export const StoreProduct: Record<string, Resolver<Root>> & {
     ]
   },
   releaseDate: ({ isVariantOf: { releaseDate } }) => releaseDate ?? '',
-  advertisement: ({ isVariantOf: { advertisement } }) => advertisement,
+  sponsoredMetadata: ({ sponsoredMetadata }) => sponsoredMetadata ?? null,
 }

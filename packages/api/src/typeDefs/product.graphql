@@ -71,9 +71,9 @@ type StoreProduct {
   """
   unitMultiplier: Float
   """
-  Advertisement information about the product.
+  Sponsored Product Metadata
   """
-  advertisement: Advertisement
+  sponsoredMetadata: SponsoredMetadata
 }
 
 """

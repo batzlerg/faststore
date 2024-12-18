@@ -14,6 +14,10 @@ export interface ProductSearchResult {
   fuzzy: string
   correction?: Correction
   redirect?: string
+  adMetaPlacementUi: {
+    placementBeaconView: string
+    placementBeaconLoad: string
+  }
 }
 
 interface Correction {
@@ -92,7 +96,11 @@ export interface Product {
   properties: Array<{ name: string; values: string[] }>
   selectedProperties: Array<{ key: string; value: string }>
   releaseDate: string
-  advertisement?: Advertisement
+  adMetaUi: {
+    beaconView: string
+    beaconLoad: string
+    beaconClick: string
+  }
 }
 
 interface Image {
@@ -111,6 +119,13 @@ interface Installment {
   PaymentSystemName: string
   PaymentSystemGroupName: string
   Name: string
+}
+
+interface Offering {
+  price: number
+  name: string
+  id: string
+  type: string
 }
 
 export interface Item {
@@ -170,6 +185,7 @@ export interface CommertialOffer {
   }>
   GetInfoErrorMessage: any | null
   CacheVersionUsedToCallCheckout: string
+  offerings: Offering[]
 }
 
 export interface Seller {
@@ -215,14 +231,6 @@ interface SpecificationGroup {
     originalName: string
     values: string[]
   }>
-}
-
-interface Advertisement {
-  adId: string
-  campaignId: string
-  actionCost: number
-  adRequestId: string
-  adResponseId: string
 }
 
 export interface Attribute {
